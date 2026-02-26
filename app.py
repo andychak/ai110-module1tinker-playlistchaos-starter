@@ -196,14 +196,14 @@ def profile_sidebar():
 
     col1, col2 = st.sidebar.columns(2)
     with col1:
-        profile["hype_min_energy"] = st.sidebar.slider(
+        profile["hype_min_energy"] = col1.slider(
             "Hype min energy",
             min_value=1,
             max_value=10,
             value=int(profile.get("hype_min_energy", 7)),
         )
     with col2:
-        profile["chill_max_energy"] = st.sidebar.slider(
+        profile["chill_max_energy"] = col2.slider(
             "Chill max energy",
             min_value=1,
             max_value=10,
