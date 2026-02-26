@@ -8,6 +8,30 @@ You do not need to understand everything at once. Approach the app as a curious 
 
 ---
 
+## Environment setup (uv)
+
+Create and activate a virtual environment, then install dependencies:
+
+```powershell
+uv venv .venv
+. .\.venv\Scripts\Activate.ps1
+uv pip install -r requirements.txt
+```
+
+If you open a new terminal, reactivate with:
+
+```powershell
+. .\.venv\Scripts\Activate.ps1
+```
+
+Run the app:
+
+```powershell
+streamlit run app.py
+```
+
+---
+
 ## How the code is organized
 
 ### `app.py`  
