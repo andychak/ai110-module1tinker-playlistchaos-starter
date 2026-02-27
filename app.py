@@ -1,3 +1,6 @@
+import json
+from pathlib import Path
+
 import streamlit as st
 
 from playlist_logic import (
@@ -13,6 +16,9 @@ from playlist_logic import (
 )
 
 
+PROFILES_FILE = Path(__file__).with_name("profiles.json")
+
+
 def init_state():
     """Initialize Streamlit session state."""
     if "songs" not in st.session_state:
@@ -21,6 +27,75 @@ def init_state():
         st.session_state.profile = dict(DEFAULT_PROFILE)
     if "history" not in st.session_state:
         st.session_state.history = []
+
+
+def sanitize_profile(raw_profile):
+    """Return a profile dict with expected keys and safe values."""
+    profile = dict(DEFAULT_PROFILE)
+
+    if isinstance(raw_profile, dict):
+        profile.update(raw_profile)
+
+    profile["name"] = str(profile.get("name", "")).strip() or "Default"
+
+    try:
+        profile["hype_min_energy"] = int(profile.get("hype_min_energy", 7))
+    except (TypeError, ValueError):
+        profile["hype_min_energy"] = 7
+    profile["hype_min_energy"] = min(10, max(1, profile["hype_min_energy"]))
+
+    try:
+        profile["chill_max_energy"] = int(profile.get("chill_max_energy", 3))
+    except (TypeError, ValueError):
+        profile["chill_max_energy"] = 3
+    profile["chill_max_energy"] = min(10, max(1, profile["chill_max_energy"]))
+
+    profile["favorite_genre"] = str(profile.get("favorite_genre", "rock")).lower().strip() or "rock"
+    profile["include_mixed"] = bool(profile.get("include_mixed", True))
+
+    return profile
+
+
+def load_saved_profiles():
+    """Load saved profiles from disk."""
+    if not PROFILES_FILE.exists():
+        return {}
+
+    try:
+        payload = json.loads(PROFILES_FILE.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError):
+        return {}
+
+    if not isinstance(payload, dict):
+        return {}
+
+    profiles = {}
+    for name, profile in payload.items():
+        clean_name = str(name).strip()
+        if not clean_name:
+            continue
+        clean_profile = sanitize_profile(profile)
+        clean_profile["name"] = clean_name
+        profiles[clean_name] = clean_profile
+
+    return profiles
+
+
+def save_profiles(profiles):
+    """Persist saved profiles to disk."""
+    serializable = {}
+    for name, profile in profiles.items():
+        clean_name = str(name).strip()
+        if not clean_name:
+            continue
+        clean_profile = sanitize_profile(profile)
+        clean_profile["name"] = clean_name
+        serializable[clean_name] = clean_profile
+
+    PROFILES_FILE.write_text(
+        json.dumps(serializable, indent=2),
+        encoding="utf-8",
+    )
 
 
 def default_songs():
@@ -187,6 +262,39 @@ def profile_sidebar():
     """Render and update the user profile."""
     st.sidebar.header("Mood profile")
 
+    saved_profiles = load_saved_profiles()
+    saved_names = sorted(saved_profiles.keys())
+
+    selected_saved_name = st.sidebar.selectbox(
+        "Saved profiles",
+        options=[""] + saved_names,
+        format_func=lambda name: "Select a saved profile..." if not name else name,
+        key="selected_saved_profile",
+    )
+
+    if st.sidebar.button("Load selected profile"):
+        if selected_saved_name and selected_saved_name in saved_profiles:
+            st.session_state.profile = sanitize_profile(saved_profiles[selected_saved_name])
+            st.sidebar.success(f"Loaded profile '{selected_saved_name}'")
+            st.rerun()
+        else:
+            st.sidebar.warning("Choose a saved profile to load.")
+
+    if st.sidebar.button("Delete selected profile"):
+        if selected_saved_name and selected_saved_name in saved_profiles:
+            del saved_profiles[selected_saved_name]
+            save_profiles(saved_profiles)
+
+            current_name = str(st.session_state.profile.get("name", "")).strip()
+            if current_name == selected_saved_name:
+                st.session_state.profile = dict(DEFAULT_PROFILE)
+
+            st.session_state.selected_saved_profile = ""
+            st.sidebar.success(f"Deleted profile '{selected_saved_name}'")
+            st.rerun()
+        else:
+            st.sidebar.warning("Choose a saved profile to delete.")
+
     profile = st.session_state.profile
 
     profile["name"] = st.sidebar.text_input(
@@ -224,6 +332,18 @@ def profile_sidebar():
         "Include Mixed playlist in views",
         value=bool(profile.get("include_mixed", True)),
     )
+
+    if st.sidebar.button("Save profile"):
+        profile_name = str(profile.get("name", "")).strip()
+        if not profile_name:
+            st.sidebar.warning("Enter a profile name before saving.")
+        else:
+            clean_profile = sanitize_profile(profile)
+            clean_profile["name"] = profile_name
+            saved_profiles[profile_name] = clean_profile
+            save_profiles(saved_profiles)
+            st.session_state.profile = clean_profile
+            st.sidebar.success(f"Saved profile '{profile_name}'")
 
     st.sidebar.write("Current profile:", profile["name"])
 
